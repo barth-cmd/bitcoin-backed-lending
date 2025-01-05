@@ -142,3 +142,40 @@
         (ok true)
     )
 )
+
+;; Repay borrowed amount
+(define-public (repay (amount uint))
+    (let (
+        (current-position (unwrap! (map-get? positions tx-sender) ERR-POSITION-NOT-FOUND))
+        (state (unwrap! (map-get? protocol-state {version: "1.0.0"}) ERR-NOT-INITIALIZED))
+        (borrowed-amount (get borrowed-amount current-position))
+    )
+        (asserts! (not (var-get protocol-paused)) ERR-NOT-AUTHORIZED)
+        (asserts! (>= borrowed-amount amount) ERR-INVALID-AMOUNT)
+        
+        ;; Burn stablecoin from repayer
+        (try! (contract-call? .xusd burn amount tx-sender))
+        
+        ;; Update position
+        (map-set positions tx-sender
+            {
+                collateral-amount: (get collateral-amount current-position),
+                borrowed-amount: (- borrowed-amount amount),
+                last-update-block: block-height
+            }
+        )
+        
+        ;; Update protocol state
+        (map-set protocol-state 
+            {version: "1.0.0"}
+            {
+                total-collateral: (get total-collateral state),
+                total-borrowed: (- (get total-borrowed state) amount),
+                interest-rate: (get interest-rate state),
+                last-rate-update: (get last-rate-update state)
+            }
+        )
+        
+        (ok true)
+    )
+)

@@ -226,3 +226,50 @@
         )
     )
 )
+
+;; Withdraw collateral
+(define-public (withdraw-collateral (amount uint))
+    (let (
+        (current-position (unwrap! (map-get? positions tx-sender) ERR-POSITION-NOT-FOUND))
+        (state (unwrap! (map-get? protocol-state {version: "1.0.0"}) ERR-NOT-INITIALIZED))
+        (collateral-amount (get collateral-amount current-position))
+        (borrowed-amount (get borrowed-amount current-position))
+    )
+        (asserts! (not (var-get protocol-paused)) ERR-NOT-AUTHORIZED)
+        (asserts! (<= amount collateral-amount) ERR-INVALID-AMOUNT)
+        
+        ;; Check if position would remain healthy after withdrawal
+        (asserts! 
+            (is-position-healthy 
+                (- collateral-amount amount)
+                borrowed-amount
+            )
+            ERR-INSUFFICIENT-COLLATERAL
+        )
+        
+        ;; Transfer sBTC back to user
+        (try! (contract-call? .sbtc transfer amount (as-contract tx-sender) tx-sender))
+        
+        ;; Update position
+        (map-set positions tx-sender
+            {
+                collateral-amount: (- collateral-amount amount),
+                borrowed-amount: borrowed-amount,
+                last-update-block: block-height
+            }
+        )
+        
+        ;; Update protocol state
+        (map-set protocol-state 
+            {version: "1.0.0"}
+            {
+                total-collateral: (- (get total-collateral state) amount),
+                total-borrowed: (get total-borrowed state),
+                interest-rate: (get interest-rate state),
+                last-rate-update: (get last-rate-update state)
+            }
+        )
+        
+        (ok true)
+    )
+)

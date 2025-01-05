@@ -179,3 +179,50 @@
         (ok true)
     )
 )
+
+;; Liquidate unhealthy position
+(define-public (liquidate (borrower principal))
+    (let (
+        (position (unwrap! (map-get? positions borrower) ERR-POSITION-NOT-FOUND))
+        (state (unwrap! (map-get? protocol-state {version: "1.0.0"}) ERR-NOT-INITIALIZED))
+        (collateral-amount (get collateral-amount position))
+        (borrowed-amount (get borrowed-amount position))
+    )
+        (asserts! (not (var-get protocol-paused)) ERR-NOT-AUTHORIZED)
+        (asserts! (not (is-position-healthy collateral-amount borrowed-amount)) ERR-POSITION-HEALTHY)
+        
+        ;; Calculate liquidation amounts
+        (let (
+            (liquidation-amount (/ (* borrowed-amount LIQUIDATION-PENALTY) u100))
+            (reward-amount (/ (* collateral-amount LIQUIDATION-PENALTY) u100))
+        )
+            ;; Transfer liquidation reward to liquidator
+            (try! (contract-call? .sbtc transfer reward-amount (as-contract tx-sender) tx-sender))
+            
+            ;; Burn debt
+            (try! (contract-call? .xusd burn liquidation-amount tx-sender))
+            
+            ;; Update position
+            (map-set positions borrower
+                {
+                    collateral-amount: (- collateral-amount reward-amount),
+                    borrowed-amount: (- borrowed-amount liquidation-amount),
+                    last-update-block: block-height
+                }
+            )
+            
+            ;; Update protocol state
+            (map-set protocol-state 
+                {version: "1.0.0"}
+                {
+                    total-collateral: (- (get total-collateral state) reward-amount),
+                    total-borrowed: (- (get total-borrowed state) liquidation-amount),
+                    interest-rate: (get interest-rate state),
+                    last-rate-update: (get last-rate-update state)
+                }
+            )
+            
+            (ok true)
+        )
+    )
+)

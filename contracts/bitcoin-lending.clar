@@ -273,3 +273,26 @@
         (ok true)
     )
 )
+
+;; Read-only functions
+(define-read-only (get-position (user principal))
+    (map-get? positions user)
+)
+
+(define-read-only (get-protocol-state)
+    (map-get? protocol-state {version: "1.0.0"})
+)
+
+(define-read-only (get-collateral-ratio (collateral uint) (borrowed uint))
+    (if (is-eq borrowed u0)
+        (ok u0)
+        (ok (/ (* collateral u100) borrowed))
+    )
+)
+
+(define-read-only (is-position-healthy (collateral uint) (borrowed uint))
+    (if (is-eq borrowed u0)
+        true
+        (>= (unwrap! (get-collateral-ratio collateral borrowed) false) COLLATERAL-RATIO)
+    )
+)

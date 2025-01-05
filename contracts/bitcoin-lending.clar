@@ -101,3 +101,44 @@
         (ok true)
     )
 )
+
+;; Borrow against collateral
+(define-public (borrow (amount uint))
+    (let (
+        (current-position (unwrap! (map-get? positions tx-sender) ERR-POSITION-NOT-FOUND))
+        (state (unwrap! (map-get? protocol-state {version: "1.0.0"}) ERR-NOT-INITIALIZED))
+        (new-borrowed-amount (+ (get borrowed-amount current-position) amount))
+        (collateral-value (get collateral-amount current-position))
+    )
+        (asserts! (not (var-get protocol-paused)) ERR-NOT-AUTHORIZED)
+        (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+        
+        ;; Check if position would be healthy after borrow
+        (asserts! (is-position-healthy collateral-value new-borrowed-amount) ERR-INSUFFICIENT-COLLATERAL)
+        
+        ;; Transfer stablecoin to borrower
+        (try! (contract-call? .xusd mint amount tx-sender))
+        
+        ;; Update position
+        (map-set positions tx-sender
+            {
+                collateral-amount: collateral-value,
+                borrowed-amount: new-borrowed-amount,
+                last-update-block: block-height
+            }
+        )
+        
+        ;; Update protocol state
+        (map-set protocol-state 
+            {version: "1.0.0"}
+            {
+                total-collateral: (get total-collateral state),
+                total-borrowed: (+ (get total-borrowed state) amount),
+                interest-rate: (get interest-rate state),
+                last-rate-update: (get last-rate-update state)
+            }
+        )
+        
+        (ok true)
+    )
+)

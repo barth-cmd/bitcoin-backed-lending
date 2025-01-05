@@ -16,3 +16,27 @@
 (define-constant LIQUIDATION-THRESHOLD u130) ;; 130% liquidation threshold
 (define-constant LIQUIDATION-PENALTY u10) ;; 10% liquidation penalty
 (define-constant PROTOCOL-FEE u1) ;; 1% protocol fee
+
+;; Data maps and variables
+(define-map positions 
+    principal 
+    {
+        collateral-amount: uint,
+        borrowed-amount: uint,
+        last-update-block: uint
+    }
+)
+
+(define-map protocol-state
+    {version: (string-ascii 10)}
+    {
+        total-collateral: uint,
+        total-borrowed: uint,
+        interest-rate: uint,
+        last-rate-update: uint
+    }
+)
+
+(define-data-var protocol-owner principal tx-sender)
+(define-data-var protocol-paused bool false)
+(define-data-var interest-rate uint u500) ;; 5% base interest rate (basis points)

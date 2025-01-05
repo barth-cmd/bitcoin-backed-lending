@@ -1,6 +1,9 @@
 ;; Bitcoin-backed Lending Protocol
 ;; Description: A decentralized lending protocol allowing users to collateralize sBTC to borrow stablecoins
 
+;; Define the SIP-010 fungible token trait
+(use-trait ft-trait .sip-010-trait.sip-010-trait)
+
 ;; Constants for protocol parameters
 (define-constant ERR-NOT-AUTHORIZED (err u100))
 (define-constant ERR-INSUFFICIENT-COLLATERAL (err u101))
@@ -10,6 +13,9 @@
 (define-constant ERR-ALREADY-INITIALIZED (err u105))
 (define-constant ERR-NOT-INITIALIZED (err u106))
 (define-constant ERR-POSITION-HEALTHY (err u107))
+(define-constant ERR-INVALID-PRINCIPAL (err u108))
+(define-constant ERR-INVALID-RATE (err u109))
+(define-constant ERR-SELF-TRANSFER (err u110))
 
 ;; Protocol configuration
 (define-constant COLLATERAL-RATIO u150) ;; 150% minimum collateral ratio
@@ -47,6 +53,7 @@
 )
 
 ;; Initialization
+;; Initialization
 (define-public (initialize)
     (begin
         (asserts! (is-protocol-owner) ERR-NOT-AUTHORIZED)
@@ -75,8 +82,8 @@
         (asserts! (not (var-get protocol-paused)) ERR-NOT-AUTHORIZED)
         (asserts! (> amount u0) ERR-INVALID-AMOUNT)
         
-        ;; Transfer sBTC from user to contract
-        (try! (contract-call? .sbtc transfer amount tx-sender (as-contract tx-sender)))
+        ;; Transfer collateral token from user to contract
+        (try! (contract-call? .mock-sbtc transfer amount tx-sender (as-contract tx-sender) none))
         
         ;; Update position
         (map-set positions tx-sender
@@ -116,8 +123,8 @@
         ;; Check if position would be healthy after borrow
         (asserts! (is-position-healthy collateral-value new-borrowed-amount) ERR-INSUFFICIENT-COLLATERAL)
         
-        ;; Transfer stablecoin to borrower
-        (try! (contract-call? .xusd mint amount tx-sender))
+        ;; Mint stablecoin to borrower
+        (try! (contract-call? .mock-xusd mint amount tx-sender))
         
         ;; Update position
         (map-set positions tx-sender
@@ -154,7 +161,7 @@
         (asserts! (>= borrowed-amount amount) ERR-INVALID-AMOUNT)
         
         ;; Burn stablecoin from repayer
-        (try! (contract-call? .xusd burn amount tx-sender))
+        (try! (contract-call? .mock-xusd burn amount tx-sender))
         
         ;; Update position
         (map-set positions tx-sender
@@ -188,7 +195,9 @@
         (collateral-amount (get collateral-amount position))
         (borrowed-amount (get borrowed-amount position))
     )
+        ;; Input validation
         (asserts! (not (var-get protocol-paused)) ERR-NOT-AUTHORIZED)
+        (asserts! (not (is-eq borrower tx-sender)) ERR-SELF-TRANSFER)
         (asserts! (not (is-position-healthy collateral-amount borrowed-amount)) ERR-POSITION-HEALTHY)
         
         ;; Calculate liquidation amounts
@@ -197,10 +206,10 @@
             (reward-amount (/ (* collateral-amount LIQUIDATION-PENALTY) u100))
         )
             ;; Transfer liquidation reward to liquidator
-            (try! (contract-call? .sbtc transfer reward-amount (as-contract tx-sender) tx-sender))
+            (try! (contract-call? .mock-sbtc transfer reward-amount (as-contract tx-sender) tx-sender none))
             
             ;; Burn debt
-            (try! (contract-call? .xusd burn liquidation-amount tx-sender))
+            (try! (contract-call? .mock-xusd burn liquidation-amount tx-sender))
             
             ;; Update position
             (map-set positions borrower
@@ -248,7 +257,7 @@
         )
         
         ;; Transfer sBTC back to user
-        (try! (contract-call? .sbtc transfer amount (as-contract tx-sender) tx-sender))
+        (try! (contract-call? .mock-sbtc transfer amount (as-contract tx-sender) tx-sender none))
         
         ;; Update position
         (map-set positions tx-sender
@@ -301,6 +310,8 @@
 (define-public (set-protocol-owner (new-owner principal))
     (begin
         (asserts! (is-protocol-owner) ERR-NOT-AUTHORIZED)
+        (asserts! (not (is-eq new-owner (var-get protocol-owner))) ERR-SELF-TRANSFER)
+        
         (ok (var-set protocol-owner new-owner))
     )
 )
@@ -308,6 +319,8 @@
 (define-public (set-interest-rate (new-rate uint))
     (begin
         (asserts! (is-protocol-owner) ERR-NOT-AUTHORIZED)
+        (asserts! (and (>= new-rate u0) (<= new-rate u10000)) ERR-INVALID-RATE) ;; Max 100% interest rate
+        
         (ok (var-set interest-rate new-rate))
     )
 )

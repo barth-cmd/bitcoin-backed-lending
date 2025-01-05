@@ -40,3 +40,25 @@
 (define-data-var protocol-owner principal tx-sender)
 (define-data-var protocol-paused bool false)
 (define-data-var interest-rate uint u500) ;; 5% base interest rate (basis points)
+
+;; Authorization check
+(define-private (is-protocol-owner)
+    (is-eq tx-sender (var-get protocol-owner))
+)
+
+;; Initialization
+(define-public (initialize)
+    (begin
+        (asserts! (is-protocol-owner) ERR-NOT-AUTHORIZED)
+        (asserts! (is-none (map-get? protocol-state {version: "1.0.0"})) ERR-ALREADY-INITIALIZED)
+        (ok (map-set protocol-state 
+            {version: "1.0.0"}
+            {
+                total-collateral: u0,
+                total-borrowed: u0,
+                interest-rate: (var-get interest-rate),
+                last-rate-update: block-height
+            }
+        ))
+    )
+)

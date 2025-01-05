@@ -296,3 +296,25 @@
         (>= (unwrap! (get-collateral-ratio collateral borrowed) false) COLLATERAL-RATIO)
     )
 )
+
+;; Admin functions
+(define-public (set-protocol-owner (new-owner principal))
+    (begin
+        (asserts! (is-protocol-owner) ERR-NOT-AUTHORIZED)
+        (ok (var-set protocol-owner new-owner))
+    )
+)
+
+(define-public (set-interest-rate (new-rate uint))
+    (begin
+        (asserts! (is-protocol-owner) ERR-NOT-AUTHORIZED)
+        (ok (var-set interest-rate new-rate))
+    )
+)
+
+(define-public (toggle-protocol-pause)
+    (begin
+        (asserts! (is-protocol-owner) ERR-NOT-AUTHORIZED)
+        (ok (var-set protocol-paused (not (var-get protocol-paused))))
+    )
+)

@@ -62,3 +62,42 @@
         ))
     )
 )
+
+;; Deposit collateral
+(define-public (deposit-collateral (amount uint))
+    (let (
+        (current-position (default-to 
+            {collateral-amount: u0, borrowed-amount: u0, last-update-block: block-height}
+            (map-get? positions tx-sender)
+        ))
+        (state (unwrap! (map-get? protocol-state {version: "1.0.0"}) ERR-NOT-INITIALIZED))
+    )
+        (asserts! (not (var-get protocol-paused)) ERR-NOT-AUTHORIZED)
+        (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+        
+        ;; Transfer sBTC from user to contract
+        (try! (contract-call? .sbtc transfer amount tx-sender (as-contract tx-sender)))
+        
+        ;; Update position
+        (map-set positions tx-sender
+            {
+                collateral-amount: (+ (get collateral-amount current-position) amount),
+                borrowed-amount: (get borrowed-amount current-position),
+                last-update-block: block-height
+            }
+        )
+        
+        ;; Update protocol state
+        (map-set protocol-state 
+            {version: "1.0.0"}
+            {
+                total-collateral: (+ (get total-collateral state) amount),
+                total-borrowed: (get total-borrowed state),
+                interest-rate: (get interest-rate state),
+                last-rate-update: (get last-rate-update state)
+            }
+        )
+        
+        (ok true)
+    )
+)

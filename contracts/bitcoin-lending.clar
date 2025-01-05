@@ -10,3 +10,9 @@
 (define-constant ERR-ALREADY-INITIALIZED (err u105))
 (define-constant ERR-NOT-INITIALIZED (err u106))
 (define-constant ERR-POSITION-HEALTHY (err u107))
+
+;; Protocol configuration
+(define-constant COLLATERAL-RATIO u150) ;; 150% minimum collateral ratio
+(define-constant LIQUIDATION-THRESHOLD u130) ;; 130% liquidation threshold
+(define-constant LIQUIDATION-PENALTY u10) ;; 10% liquidation penalty
+(define-constant PROTOCOL-FEE u1) ;; 1% protocol fee
